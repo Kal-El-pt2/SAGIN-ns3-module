@@ -1,33 +1,48 @@
-// aerial-node.h
 #ifndef AERIAL_NODE_H
 #define AERIAL_NODE_H
 
 #include "sagin-node.h"
 #include "ns3/mobility-model.h"
+#include "ns3/vector.h"
+#include "ns3/constant-velocity-mobility-model.h"
+#include "ns3/constant-position-mobility-model.h"
 
 namespace ns3 {
 
-enum AerialType { UAV, BALLOON, HAPS };
+// Enum for different types of aerial nodes
+enum AerialType
+{
+    UAV,
+    BALLOON,
+    HAPS
+};
 
-class AerialNode : public SaginNode {
+class AerialNode : public SaginNode
+{
 public:
-  static TypeId GetTypeId (void);
+    static TypeId GetTypeId(void);
 
-  AerialNode (AerialType type);
-  AerialNode ();
-  //virtual ~AerialNode ();
+    AerialNode();
+    AerialNode(AerialType type);
+    AerialNode(AerialType type, int uniqueId);
+    ~AerialNode();
 
-  void SetPosition (const Vector3D &position);
-  Vector3D GetPosition (void) const;
+    // Set and Get methods for Position and Velocity
+    void SetPosition(const Vector& position);
+    Vector GetPosition(void) const;
 
-  void SetVelocity (const Vector &velocity);
-  Vector GetVelocity (void) const;
+    void SetVelocity(const Vector& velocity);
+    Vector GetVelocity(void) const;
+
+    // Method to start updating mobility periodically
+    void StartMobilityUpdate(double interval);
 
 private:
-  Vector3D m_position;  // 3D position: (x, y, z)
-  Vector m_velocity;
-  AerialType m_type;
-  Ptr<MobilityModel> m_mobility;  // Mobility model
+    AerialType m_type;   // Type of aerial node (e.g., UAV, HAPS)
+    Ptr<MobilityModel> m_mobility;  // Pointer to mobility model
+
+    // Method to update position based on velocity and time interval
+    void UpdatePosition(double interval);
 };
 
 } // namespace ns3

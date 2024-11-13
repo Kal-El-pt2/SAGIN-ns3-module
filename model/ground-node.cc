@@ -1,85 +1,100 @@
-// ground-node.cc
 #include "ground-node.h"
 #include "ns3/log.h"
-#include "ns3/socket.h"
-#include "ns3/packet.h"
-#include "ns3/uinteger.h"
-#include "ns3/inet-socket-address.h"
+#include "ns3/constant-velocity-mobility-model.h"
 #include "ns3/simulator.h"
-#include "ns3/internet-module.h"
 
-namespace ns3 {
+namespace ns3
+{
 
-NS_LOG_COMPONENT_DEFINE ("GroundNode");
-NS_OBJECT_ENSURE_REGISTERED (GroundNode);
+NS_LOG_COMPONENT_DEFINE("GroundNode");
+NS_OBJECT_ENSURE_REGISTERED(GroundNode);
 
 TypeId
-GroundNode::GetTypeId (void) {
-  static TypeId tid = TypeId ("ns3::GroundNode")
-    .SetParent<SaginNode> ()
-    .SetGroupName ("SAGIN")
-    .AddConstructor<GroundNode> ();
-  return tid;
+GroundNode::GetTypeId(void)
+{
+    static TypeId tid = TypeId("ns3::GroundNode")
+                            .SetParent<SaginNode>()
+                            .SetGroupName("SAGIN")
+                            .AddConstructor<GroundNode>();
+    return tid;
 }
 
-GroundNode::GroundNode ()
-  : m_socket (0) {}
-
-GroundNode::~GroundNode () {
-  m_socket = 0;
+GroundNode::GroundNode()
+    : SaginNode(0, NodeType::GROUND_NODE),
+      m_position(Vector(0.0, 0.0, 0.0)),
+      m_velocity(Vector(0.0, 0.0, 0.0)),
+      m_updateInterval(1.0) // Default update interval in seconds
+{
+    m_mobility = CreateObject<ConstantVelocityMobilityModel>();
 }
 
-void GroundNode::SetPosition (const Vector2D &position) {
-  m_position = position;
+GroundNode::GroundNode(int uniqueId)
+    : SaginNode(uniqueId, NodeType::GROUND_NODE),
+      m_position(Vector(0.0, 0.0, 0.0)),
+      m_velocity(Vector(0.0, 0.0, 0.0)),
+      m_updateInterval(1.0) // Default update interval in seconds
+{
+    m_mobility = CreateObject<ConstantVelocityMobilityModel>();
 }
 
-Vector2D GroundNode::GetPosition (void) const {
-  return m_position;
-}
-
-// void GroundNode::SetupSocket (Address address, uint16_t port) {
-//   if (m_socket == nullptr) {
-//     m_socket = Socket::CreateSocket (GetNode (), UdpSocketFactory::GetTypeId ());
-//     m_socket->Bind (InetSocketAddress (Ipv4Address::GetAny (), port));
-//     m_socket->SetRecvCallback (MakeCallback (&GroundNode::ReceivePacket, this));
-//     NS_LOG_INFO ("Socket setup complete for GroundNode with address: " << address << " on port: " << port);
-//   }
-// }
-
-void GroundNode::SetupSocket (Address address, uint16_t port) {
-  if (m_socket == nullptr) {
-    // Use the GetNode() method to get the node pointer
-    Ptr<Node> node = GetNode ();
-    if (node != nullptr) {
-      m_socket = Socket::CreateSocket (node, UdpSocketFactory::GetTypeId ());
-      m_socket->Bind (InetSocketAddress (Ipv4Address::GetAny (), port));
-      m_socket->SetRecvCallback (MakeCallback (&GroundNode::ReceivePacket, this));
-      NS_LOG_INFO ("Socket setup complete for GroundNode with address: " << address << " on port: " << port);
-    } else {
-      NS_LOG_ERROR ("Node pointer is null in GroundNode");
+GroundNode::~GroundNode()
+{
+    if (m_updateEvent.IsRunning())
+    {
+        Simulator::Cancel(m_updateEvent);
     }
-  }
 }
 
-void GroundNode::SendPacket (Ptr<Packet> packet, Address destinationAddress, uint16_t port) {
-  if (m_socket) {
-    m_socket->Connect (InetSocketAddress (Ipv4Address::ConvertFrom (destinationAddress), port));
-    m_socket->Send (packet);
-    NS_LOG_INFO ("GroundNode sent packet to " << InetSocketAddress::ConvertFrom (destinationAddress).GetIpv4 () << ":" << port);
-  } else {
-    NS_LOG_ERROR ("Socket not initialized in GroundNode");
-  }
+void
+GroundNode::SetPosition(const Vector& position)
+{
+    m_position = position;
+    m_mobility->SetPosition(position);
 }
 
-void GroundNode::ReceivePacket (Ptr<Socket> socket) {
-  Ptr<Packet> packet = socket->Recv ();
-  NS_LOG_INFO ("GroundNode received packet of size: " << packet->GetSize ());
-  ProcessData (packet);  // Process the received data
+Vector
+GroundNode::GetPosition(void) const
+{
+    return m_mobility->GetPosition();
 }
 
-void GroundNode::ProcessData (Ptr<Packet> packet) {
-  NS_LOG_INFO ("GroundNode processing data of packet size: " << packet->GetSize ());
-  // Implement custom data processing here (parsing packet content, responding, etc.)
+void
+GroundNode::SetVelocity(const Vector& velocity)
+{
+    m_velocity = velocity;
+    if (m_mobility->GetObject<ConstantVelocityMobilityModel>())
+    {
+        m_mobility->GetObject<ConstantVelocityMobilityModel>()->SetVelocity(velocity);
+    }
+}
+
+Vector
+GroundNode::GetVelocity(void) const
+{
+    return m_velocity;
+}
+
+void
+GroundNode::StartPositionUpdates(double interval)
+{
+    m_updateInterval = interval;
+    m_updateEvent = Simulator::Schedule(Seconds(interval), &GroundNode::UpdatePosition, this);
+}
+
+void
+GroundNode::UpdatePosition()
+{
+    m_position.x += m_velocity.x * m_updateInterval;
+    m_position.y += m_velocity.y * m_updateInterval;
+    m_position.z += m_velocity.z * m_updateInterval;
+
+    m_mobility->SetPosition(m_position);
+
+    // Log position update
+    NS_LOG_INFO("Updated position of GroundNode " << GetId() << " to " << m_position);
+
+    // Reschedule the next update
+    m_updateEvent = Simulator::Schedule(Seconds(m_updateInterval), &GroundNode::UpdatePosition, this);
 }
 
 } // namespace ns3

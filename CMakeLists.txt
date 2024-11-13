@@ -17,7 +17,10 @@ set(source_files
     model/aerial-node.cc
     model/space-node.cc
     model/ground-node.cc
-    model/sagin-mobility-model.cc
+    model/sagin-mac.cc
+    model/sagin-phy.cc
+    model/sagin-routing.cc
+    model/node-address.cc
     helper/sagin-helper.cc
 )
 
@@ -26,7 +29,10 @@ set(header_files
     model/aerial-node.h
     model/space-node.h
     model/ground-node.h
-    model/sagin-mobility-model.h
+    model/node-address.h
+    model/sagin-mac.h
+    model/sagin-phy.h
+    model/sagin-routing.h
     helper/sagin-helper.h
 )
 
@@ -34,7 +40,7 @@ build_lib(
     LIBNAME sagin
     SOURCE_FILES ${source_files}
     HEADER_FILES ${header_files}
-    LIBRARIES_TO_LINK ${libcore} ${libmobility} ${libinternet} ${libpoint_to_point} ${libapplications}
+    LIBRARIES_TO_LINK ${libcore} ${libmobility} ${libapplications}
     TEST_SOURCES test/sagin-test-suite.cc
                  ${examples_as_tests_sources}
 )

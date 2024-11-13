@@ -1,65 +1,116 @@
-// aerial-node.cc
 #include "aerial-node.h"
 #include "ns3/log.h"
-#include "ns3/constant-velocity-mobility-model.h"
-#include "ns3/constant-position-mobility-model.h"
+#include "ns3/simulator.h"
 
 namespace ns3 {
 
-NS_LOG_COMPONENT_DEFINE ("AerialNode");
-
-NS_OBJECT_ENSURE_REGISTERED (AerialNode);
+NS_LOG_COMPONENT_DEFINE("AerialNode");
+NS_OBJECT_ENSURE_REGISTERED(AerialNode);
 
 TypeId
-AerialNode::GetTypeId (void) {
-  static TypeId tid = TypeId ("ns3::AerialNode")
-    .SetParent<SaginNode> ()
-    .SetGroupName ("SAGIN")
-    .AddConstructor<AerialNode> ();
-  return tid;
+AerialNode::GetTypeId(void)
+{
+    static TypeId tid = TypeId("ns3::AerialNode")
+                            .SetParent<SaginNode>()
+                            .SetGroupName("SAGIN")
+                            .AddConstructor<AerialNode>();
+    return tid;
 }
 
 // Default constructor
-AerialNode::AerialNode() 
-    : m_position(Vector3D(0.0, 0.0, 0.0)), 
-      m_velocity(Vector(0.0, 0.0, 0.0)), 
-      m_type(UAV), 
-      m_mobility(CreateObject<ConstantPositionMobilityModel>()) { 
+AerialNode::AerialNode()
+    : SaginNode(0, NodeType::AERIAL_NODE),  // Default uniqueId set to 0
+      m_type(UAV)
+{
+    // Default mobility model setup based on aerial node type
+    m_mobility = CreateObject<ConstantPositionMobilityModel>();  // Default to position model
 }
 
-AerialNode::AerialNode (AerialType type) : m_type(type) {
-  // Set up a different mobility model based on the aerial type
-  if (m_type == UAV) {
-    m_mobility = CreateObject<ConstantVelocityMobilityModel> ();
-  } else if (m_type == BALLOON) {
-    m_mobility = CreateObject<ConstantPositionMobilityModel> ();
-  } else if (m_type == HAPS) {
-    m_mobility = CreateObject<ConstantVelocityMobilityModel> (); // example model
-  }
+// Constructor with specific AerialType
+AerialNode::AerialNode(AerialType type)
+    : SaginNode(0, NodeType::AERIAL_NODE),
+      m_type(type)
+{
+    if (m_type == UAV || m_type == HAPS) {
+        m_mobility = CreateObject<ConstantVelocityMobilityModel>();
+    } else {
+        m_mobility = CreateObject<ConstantPositionMobilityModel>();
+    }
 }
 
-// No need for an explicit destructor
-// AerialNode::~AerialNode() {}
-
-void AerialNode::SetPosition (const Vector3D &position) {
-  m_position = position;
-  m_mobility->SetPosition (position);
+// Constructor with specific AerialType and uniqueId
+AerialNode::AerialNode(AerialType type, int uniqueId)
+    : SaginNode(uniqueId, NodeType::AERIAL_NODE),
+      m_type(type)
+{
+    if (m_type == UAV || m_type == HAPS) {
+        m_mobility = CreateObject<ConstantVelocityMobilityModel>();
+    } else {
+        m_mobility = CreateObject<ConstantPositionMobilityModel>();
+    }
 }
 
-Vector3D AerialNode::GetPosition (void) const {
-  //return m_mobility->GetPosition ();
-  return m_position; // Return the stored position
+// Destructor
+AerialNode::~AerialNode() {}
+
+void
+AerialNode::SetPosition(const Vector& position)
+{
+    m_mobility->SetPosition(position);
+    NS_LOG_INFO("Position set to " << m_mobility->GetPosition());
 }
 
-void AerialNode::SetVelocity (const Vector &velocity) {
-  m_velocity = velocity;
-  if (m_mobility->GetObject<ConstantVelocityMobilityModel> ()) {
-    m_mobility->GetObject<ConstantVelocityMobilityModel> ()->SetVelocity (velocity);
-  }
+Vector
+AerialNode::GetPosition(void) const
+{
+    return m_mobility->GetPosition();
 }
 
-Vector AerialNode::GetVelocity (void) const {
-  return m_velocity;
+void
+AerialNode::SetVelocity(const Vector& velocity)
+{
+    Ptr<ConstantVelocityMobilityModel> velocityModel = m_mobility->GetObject<ConstantVelocityMobilityModel>();
+    if (velocityModel != nullptr) {
+        velocityModel->SetVelocity(velocity);
+        NS_LOG_INFO("Velocity set to " << velocity);
+    } else {
+        NS_LOG_WARN("Velocity model not available for this aerial node type.");
+    }
 }
 
-} // namespace ns3
+Vector
+AerialNode::GetVelocity(void) const
+{
+    Ptr<ConstantVelocityMobilityModel> velocityModel = m_mobility->GetObject<ConstantVelocityMobilityModel>();
+    if (velocityModel != nullptr) {
+        return velocityModel->GetVelocity();
+    }
+    return Vector(0.0, 0.0, 0.0);  // Return zero if no velocity model
+}
+
+// Start mobility updates periodically
+void
+AerialNode::StartMobilityUpdate(double interval)
+{
+    Simulator::Schedule(Seconds(interval), &AerialNode::UpdatePosition, this, interval);
+}
+
+// Update position based on velocity and time interval
+void
+AerialNode::UpdatePosition(double interval)
+{
+    Ptr<ConstantVelocityMobilityModel> velocityModel = m_mobility->GetObject<ConstantVelocityMobilityModel>();
+    if (velocityModel != nullptr) {
+        Vector currentPos = velocityModel->GetPosition();
+        Vector velocity = velocityModel->GetVelocity();
+        Vector newPos(currentPos.x + velocity.x * interval,
+                      currentPos.y + velocity.y * interval,
+                      currentPos.z + velocity.z * interval);
+        velocityModel->SetPosition(newPos);
+        NS_LOG_INFO("Updated position to " << newPos);
+    }
+    // Schedule the next update
+    Simulator::Schedule(Seconds(interval), &AerialNode::UpdatePosition, this, interval);
+}
+
+}  // namespace ns3
